@@ -4,6 +4,20 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 import os
+from google.oauth2.credentials import Credentials
+
+def get_creds_from_tokens(access_token, refresh_token):
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    token_uri = "https://oauth2.googleapis.com/token"
+
+    return Credentials(
+        token=access_token,
+        refresh_token=refresh_token,
+        token_uri=token_uri,
+        client_id=client_id,
+        client_secret=client_secret
+    )
 
 def get_drive_service(access_token, refresh_token):
     """ Service Object banata hai using Tokens """

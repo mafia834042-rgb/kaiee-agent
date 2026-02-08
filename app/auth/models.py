@@ -5,7 +5,17 @@ from app.db.session import Base
 from datetime import datetime
 
 class User(Base):
+    
     __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String, unique=True, index=True)
+    role = Column(String, default="admin")
+    
+    # ... (Baki purane columns waise hi rehne dein) ...
+    
+    # 👇 YE NAYA COLUMN JODEIN (Zaroori)
+    spreadsheet_id = Column(String, nullable=True)
 
     id = Column(Integer, primary_key=True, index=True)
     phone_number = Column(String, unique=True, index=True)
