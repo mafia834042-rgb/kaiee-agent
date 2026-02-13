@@ -1,39 +1,45 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
+from fastapi.responses import RedirectResponse
+from app.database import get_db
+# Ab hum sahi function import kar rahe hain jo humne Step 1 mein banaya
+from app.auth.service import update_user_tokens, get_user_by_phone, create_user
+from app.tools.sheets.google_client import get_google_auth_url, get_tokens_from_code
 
-from app.db.session import get_db
-from app.auth.service import create_user, authenticate_user
-from app.auth.security import get_current_user
+router = APIRouter()
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+@router.get("/google/login")
+async def google_login(phone: str, db: Session = Depends(get_db)):
+    # 1. User check karein, nahi hai toh bana dein
+    user = get_user_by_phone(db, phone)
+    if not user:
+        create_user(db, {"phone_number": phone})
+    
+    # 2. Google Login Page par bhejein
+    auth_url = get_google_auth_url(phone)
+    return RedirectResponse(auth_url)
 
-@router.post("/signup")
-def signup(payload: dict, db: Session = Depends(get_db)):
-    email = payload.get("email")
-    password = payload.get("password")
-    tenant_id = payload.get("tenant_id")
+@router.get("/google/callback")
+async def google_callback(request: Request, db: Session = Depends(get_db)):
+    code = request.query_params.get("code")
+    state_phone = request.query_params.get("state") # Phone number wapas milega
+    
+    if not code or not state_phone:
+        return "❌ Error: Google se code nahi mila."
 
-    if not email or not password or not tenant_id:
-        raise HTTPException(status_code=400, detail="Missing fields")
+    # 3. Tokens Exchange Karein
+    tokens = get_tokens_from_code(code)
+    
+    if "error" in tokens:
+        return f"❌ Error: {tokens['error']}"
 
-    return create_user(db, email, password, tenant_id)
-
-@router.post("/login")
-def login(payload: dict, db: Session = Depends(get_db)):
-    email = payload.get("email")
-    password = payload.get("password")
-
-    result = authenticate_user(db, email, password)
-    if not result:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    return result
-
-@router.get("/me")
-def me(current_user=Depends(get_current_user)):
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "tenant_id": current_user.tenant_id,
-        "is_active": current_user.is_active
-    }
+    # 4. Database Update Karein
+    update_user_tokens(
+        db, 
+        state_phone, 
+        tokens["access_token"], 
+        tokens.get("refresh_token"), # Refresh token optional hota hai
+        None
+    )
+    
+    return "✅ Tokens saved successfully! Ab aap WhatsApp par message bhej sakte hain."
